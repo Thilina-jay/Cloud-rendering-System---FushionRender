@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Remove User - Cloud Rendering System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+
+  <video autoplay muted loop id="background-video">
+    <source src="{{ url_for('static', filename='videos/2.mp4') }}" type="video/mp4">
+  </video>
+
+  <header id="top-bar">
+    <h1>Cloud Rendering System</h1>
+  </header>
+
+  <div class="container">
+    <h2>Remove Your Account</h2>
+    {% if error %}
+      <p style="color: red;">{{ error }}</p>
+    {% elif message %}
+      <p style="color: green;">{{ message }}</p>
+    {% endif %}
+    
+    <form method="POST">
+      <input type="text" name="username" placeholder="Enter your username" required>
+      <input type="password" name="password" placeholder="Enter your password" required>
+      <button type="submit">Delete My Account</button>
+    </form>
+
+    <p style="margin-top: 10px;">
+      <a href="{{ url_for('login') }}" style="color: #abff32;">Back to login</a>
+    </p>
+  </div>
+
+  <footer class="footer">
+    <p>&copy; 2025 Cloud Rendering System. All rights reserved.</p>
+  </footer>
+
+</body>
+</html>

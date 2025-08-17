@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cloud Rendering System</title>
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+
+</head>
+<body>
+  <header id="top-bar">
+    <h1>Cloud Rendering System</h1>
+        <a href="{{ url_for('index') }}" id="home-button">
+  <img src="{{ url_for('static', filename='images/home.png') }}" alt="Home" />
+</a>
+
+      <!-- Logout Button -->
+        {% if session.get('username') %}
+        <a href="{{ url_for('logout') }}" id="logout-button">Logout</a>
+        {% endif %}
+        
+        {% if session.get('username') %}
+        <span id="username">{{ session['username'] }}</span>
+        {% endif %}
+  </header>
+  <video autoplay muted loop id="background-video">
+    <source src="{{ url_for('static', filename='videos/2.mp4') }}" type="video/mp4">
+    Your browser does not support the video tag.
+  </video>
+
+  
+  <div class="container">
+ 
+
+    
+   <div class="section" id="start-vms-section">
+  <h2>Step 1: Start Required VMs</h2>
+<input type="number" id="total-frames" name="total_frames" placeholder="Enter total frames" required min="1" max="20" />
+
+<div class="spinner" id="start-vms-spinner"></div> 
+<button id="start-vms-button">Start VMs</button>
+
+</div>
+
+    <!-- Upload Section -->
+    <div class="section" id="upload-section">
+      <h2>Step 2: Upload Blender File</h2>
+      <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" id="blender-file" name="file" accept=".blend" required />
+        <button type="submit">Upload File</button>
+      </form>
+
+
+
+
+      <div class="spinner" id="upload-spinner"></div>
+      <p id="upload-message"></p>
+      <div id="engine-selection" style="display: none; margin-top: 10px;">
+  <label style="margin-right: 10px;">
+    <input type="radio" name="render_engine" value="BLENDER_EEVEE" checked>
+    Eevee
+  </label>
+  <label>
+    <input type="radio" name="render_engine" value="CYCLES">
+    Cycles
+  </label>
+</div>
+      <button id="render-button" class="hidden">Render Frames</button>
+<div class="spinner-container">
+  <div class="spinner" id="render-spinner"></div>
+</div>
+
+
+    </div>
+
+    <!-- Status Section -->
+    <div id="status-section">
+    
+      <p id="render-status">Awaiting updates...</p>
+      <button id="transfer-merge-button" class="hidden">Transfer and Merge</button>
+      <button id="download-button" class="hidden">Download File</button>
+      <button id="clear-files-button" class="hidden">Clear Merging Instance Files</button>
+
+    </div>
+  </div>
+
+  <script>
+
+document.addEventListener("DOMContentLoaded", function () {
+    // Protect main page only
+    if (window.location.pathname === "/") {
+        if (!sessionStorage.getItem("authenticated")) {
+            // Delay slightly to allow session to settle after login
+            setTimeout(() => {
+                window.location.href = "/logout";
+            }, 100);
+        }
+        sessionStorage.setItem("authenticated", "true");
+
+        window.onpageshow = function (event) {
+            if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
+                window.location.href = "/logout";
+            }
+        };
+    }
+});
+
+
+document.getElementById('start-vms-button').addEventListener('click', function () {
+  const frameCount = document.getElementById('total-frames').value;
+  const spinner = document.getElementById('start-vms-spinner');  // 🌀
+  const button = document.getElementById('start-vms-button');
+
+  if (!frameCount || frameCount <= 0) {
+    alert("Please enter a valid number of frames.");
+    return;
+  }
+
+  if (frameCount > 20) {
+    alert("Maximum frame count allowed is 20.");
+    return;
+  }
+
+  spinner.style.display = 'inline-block';   
+  button.disabled = true;
+
+  fetch('/start_vms', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ frames: frameCount })
+  })
+  .then(response => response.json())
+  .then(data => {
+    spinner.style.display = 'none';
+    button.disabled = false;
+
+    if (data.status === "success") {
+      alert("VMs started successfully:\n" + data.started_vms.join("\n"));
+      document.getElementById('start-vms-button').style.display = 'none';
+
+      document.getElementById('upload-section').style.display = 'block';
+     
+    } else {
+      alert("Error: " + data.message);
+    }
+  })
+  .catch(() => {
+    spinner.style.display = 'none';
+    button.disabled = false;
+    alert("Failed to start VMs. Check server or permissions.");
+  });
+});
+
+ // Upload file logic
+document.getElementById('upload-form').addEventListener('submit', function (event) {
+  event.preventDefault();
+  const formData = new FormData();
+  formData.append("file", document.getElementById('blender-file').files[0]);
+  formData.append("total_frames", document.getElementById('total-frames').value);
+
+  document.getElementById('upload-spinner').style.display = 'inline-block';
+  document.getElementById('upload-message').textContent = 'Uploading...';
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/upload', true);
+  xhr.onload = function () {
+    document.getElementById('upload-spinner').style.display = 'none';
+    if (xhr.status === 200) {
+      const response = JSON.parse(xhr.responseText);
+      if (response.details) {
+        let message = '';
+        response.details.forEach(detail => {
+          message += `<p>${detail}</p>`;
+        });
+        document.getElementById('upload-message').innerHTML = message;
+        document.querySelector('#upload-form button[type="submit"]').style.display = 'none';
+
+        document.getElementById('render-button').classList.remove('hidden');
+        document.getElementById('engine-selection').style.display = 'block';
+
+        
+        document.getElementById('status-section').style.display = 'block';
+      }
+    } else {
+      document.getElementById('upload-message').textContent = "Upload failed.";
+    }
+  };
+  xhr.send(formData);
+});
+
+
+    // Render logic
+document.getElementById('render-button').addEventListener('click', function () {
+  // Disable render engine radio buttons after clicking Render
+const radios = document.querySelectorAll('input[name="render_engine"]');
+radios.forEach(radio => radio.disabled = true);
+
+  document.getElementById('render-button').disabled = true;
+  document.getElementById('render-spinner').style.display = 'inline-block';
+  document.getElementById('upload-message').textContent = "Rendering in progress1";
+
+  const selectedEngine = document.querySelector('input[name="render_engine"]:checked').value;
+
+  fetch('/render', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ engine: selectedEngine })
+  })
+  .then(response => response.json())
+  .then(response => {
+    if (response.details) {
+      document.getElementById('upload-message').textContent = "";
+      checkRenderStatus();
+    } else {
+      document.getElementById('upload-message').textContent = "Rendering failed.";
+      document.getElementById('render-spinner').style.display = 'none';
+    }
+  });
+});
+
+
+
+    // Render status polling
+    function checkRenderStatus() {
+      const interval = setInterval(() => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', '/check_complete', true);
+        xhr.onload = function () {
+          if (xhr.status === 200) {
+            const response = JSON.parse(xhr.responseText);
+            if (response.details === 'Rendering successfully completed.') {
+              document.getElementById('render-status').textContent = "Rendering successfully completed!";
+              document.getElementById('render-spinner').style.display = 'none';
+
+              clearInterval(interval);
+              document.getElementById('render-button').classList.add('hidden');
+              document.getElementById('transfer-merge-button').classList.remove('hidden');
+            } else {
+              document.getElementById('render-status').textContent = "Rendering in progress2";
+            }
+          }
+        };
+        xhr.send();
+      }, 5000);
+    }
+
+    // Merge trigger
+    document.getElementById('transfer-merge-button').addEventListener('click', function () {
+      document.getElementById('transfer-merge-button').disabled = true;
+      document.getElementById('render-status').textContent = "Transferring and merging files...";
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/transfer_and_merge', true);
+      xhr.onload = function () {
+        if (xhr.status === 200) {
+          const response = JSON.parse(xhr.responseText);
+          let message = '';
+          response.details.forEach(detail => {
+            message += `<p>${detail}</p>`;
+          });
+          document.getElementById('render-status').innerHTML = message;
+          document.getElementById('transfer-merge-button').style.display = 'none';
+
+
+          if (response.details.some(detail => detail.includes("Files successfully merged into"))) {
+            document.getElementById('download-button').classList.remove('hidden');
+          }
+        } else {
+          document.getElementById('render-status').textContent = "Transfer and merge failed.";
+        }
+      };
+      xhr.send();
+    });
+
+    // Download final video
+  document.getElementById('download-button').addEventListener('click', function () {
+  document.getElementById('download-button').style.display = 'none';
+
+  // Stop temporary VMs in the background
+  fetch('/stop_temp_vms', { method: 'POST' })
+    .then(response => response.json())
+    .then(data => {
+      console.log("VM stop response:", data.message || data.error);
+    })
+    .catch(error => console.error("Error stopping VMs:", error));
+
+  //  Start download immediately
+  window.location.href = '/download_file_only';
+});
+
+
+const clearBtn = document.getElementById('clear-files-button');
+const downloadBtn = document.getElementById('download-button');
+
+// Show clear button when download button is visible
+const observer = new MutationObserver(() => {
+  if (!downloadBtn.classList.contains('hidden')) {
+    clearBtn.classList.remove('hidden');
+  }
+});
+observer.observe(downloadBtn, { attributes: true, attributeFilter: ['class'] });
+
+// Clear merging instance files on click
+clearBtn.addEventListener('click', () => {
+  clearBtn.disabled = true;
+  clearBtn.textContent = 'Clearing...';
+
+  fetch('/clear_merging_instance', { method: 'POST' })
+    .then(response => response.json())
+.then(data => {
+  alert(data.message || 'Files cleared successfully.');
+  clearBtn.disabled = true;                        
+  clearBtn.style.opacity = '0.6';                  
+  clearBtn.style.cursor = 'not-allowed';           
+  clearBtn.textContent = 'Cleared ✔';              
+})
+
+    .catch(() => {
+      alert('Error clearing files.');
+      clearBtn.disabled = false;
+      clearBtn.textContent = 'Clear Merging Instance Files';
+    });
+});
+
+if (window.location.pathname === "/") {
+    if (!sessionStorage.getItem("authenticated")) {
+        window.location.href = "/logout";
+    }
+    sessionStorage.setItem("authenticated", "true");
+
+    window.onpageshow = function (event) {
+        if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
+            window.location.href = "/logout";
+        }
+    };
+}
+// When the home logo is clicked, stop temp VMs first, then navigate home.
+  (function () {
+    const homeBtn = document.getElementById('home-button');
+    if (!homeBtn) return;
+
+    homeBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+
+      // Prevent double-clicks and give a tiny visual cue
+      if (homeBtn.dataset.busy === "1") return;
+      homeBtn.dataset.busy = "1";
+      homeBtn.style.pointerEvents = 'none';
+      homeBtn.style.opacity = '0.6';
+
+      // Fire-and-forget stop request; keepalive lets it finish during navigation
+      fetch('/stop_temp_vms', {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'home_click' })
+      })
+      .catch(() => { /* ignore: still navigate */ })
+      .finally(() => {
+        window.location.href = "{{ url_for('index') }}";
+      });
+    });
+  })();
+  </script>
+  <!-- Footer Section -->
+<footer class="footer">
+  <p>&copy; 2025 Cloud Rendering System. All rights reserved.</p>
+</footer>
+
+</body>
+</html>

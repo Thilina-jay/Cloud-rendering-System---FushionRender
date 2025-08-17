@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign Up - Cloud Rendering System</title>
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <video autoplay muted loop id="background-video">
+    <source src="{{ url_for('static', filename='videos/2.mp4') }}" type="video/mp4">
+    Your browser does not support the video tag.
+  </video>
+
+  <header id="top-bar">
+    <h1>Cloud Rendering System</h1>
+  </header>
+
+  <div class="container">
+    <h2>Create an Account</h2>
+
+    {% if error %}
+      <p style="color: red;">{{ error }}</p>
+    {% endif %}
+
+<form method="POST">
+  <input type="text" name="username" placeholder="Choose a username" required />
+  <input type="password" name="password" placeholder="Choose a password" required />
+  <input type="password" name="confirm_password" placeholder="Confirm your password" required />
+  <button type="submit">Sign Up</button>
+</form>
+
+
+    <p style="margin-top: 10px;">Already have an account? 
+      <a href="{{ url_for('login') }}" style="color: #abff32;">Log in here</a>.
+    </p>
+  </div>
+
+  <footer class="footer">
+    <p>&copy; 2025 Cloud Rendering System. All rights reserved.</p>
+  </footer>
+
+</body>
+</html>
